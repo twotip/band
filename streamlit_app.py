@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 페이지 설정
 st.set_page_config(page_title="터널 사고보고 작성기", layout="wide")
@@ -18,28 +18,25 @@ ACCIDENT_TYPES = ["교통사고", "화재사고"]
 LOC_DETAILS = ["터널내", "입구부", "출구부"]
 LANES = ["1차로", "2차로", "갓길", "전차로"]
 
-# 시간 문자열 생성 함수
+# 한국 시간(KST) 생성 함수 (UTC + 9시간)
 def get_now_str():
-    now = datetime.now()
+    # 서버 시간(UTC)에 9시간을 더해 한국 시간으로 변환
+    now_kst = datetime.utcnow() + timedelta(hours=9)
     weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
-    return now.strftime(f"%Y.%m.%d({weekday_map[now.weekday()]}) %H:%M")
+    return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
 
-# 세션 상태 초기화 (시간 변수 저장)
+# 세션 상태 초기화
 if 'report_time' not in st.session_state:
     st.session_state.report_time = get_now_str()
 
 st.title("🚀 터널 사고보고 작성기 (Mobile)")
 
-# 좌우 레이아웃 (모바일은 자동 위아래)
 col1, col2 = st.columns([1, 1])
 
 with col1:
     st.subheader("📝 정보 입력")
     
-    # 보고 단계 선택 (변경 시 시간 자동 갱신)
     r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
-    
-    # 사고 유형 및 터널 선택
     a_type = st.selectbox("사고 유형", ACCIDENT_TYPES)
     tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
     
@@ -56,17 +53,15 @@ with col1:
     with c_pos3:
         dist = st.text_input("거리(m)", "")
 
-    # --- 시간 설정 영역 ---
+    # 시간 설정 영역
     t_col1, t_col2 = st.columns([3, 1])
     with t_col2:
-        # 버튼 누르면 세션 상태의 시간을 현재 시간으로 업데이트
         if st.button("🕒 갱신"):
             st.session_state.report_time = get_now_str()
             st.rerun()
     with t_col1:
         time_str = st.text_input("사고 일시", st.session_state.report_time)
 
-    # 기본값 설정
     default_status = "현장 출동 및 파악 중" if r_type == "최초" else ("상황 종료 및 소통 원활" if r_type == "최종" else "")
     default_etc = "확인중" if r_type == "최초" else "없음"
 
@@ -102,6 +97,5 @@ report_text = f"""[{tunnel_name} {a_type} ({r_type}) 보고]
 
 with col2:
     st.subheader("📋 미리보기 (복사 가능)")
-    # 스마트폰에서 복사가 용이하도록 텍스트 영역 제공
     st.text_area("결과물", report_text, height=450)
     st.info("💡 위 박스의 내용을 길게 눌러 '전체 선택' 후 복사하세요.")
