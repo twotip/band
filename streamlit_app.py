@@ -5,34 +5,37 @@ from datetime import datetime, timedelta, timezone
 # 1. 페이지 설정
 st.set_page_config(page_title="터널 밴드보고 작성기", layout="wide")
 
-# 2. 모바일 맞춤형 스타일 설정 (제목 크기 축소 및 스타일)
+# 2. 모바일 최적화 스타일 (문법 오류 수정 완료)
 st.markdown("""
     <style>
-    /* 제목 크기 조정 */
+    /* 제목 크기 대폭 축소 */
     .main-title {
-        font-size: 22px !important;
+        font-size: 20px !important;
         font-weight: bold;
-        margin-bottom: 15px;
-        line-height: 1.2;
+        margin-bottom: 10px;
+        color: #FFFFFF;
     }
     /* 서브헤더 크기 조정 */
     .sub-title {
-        font-size: 18px !important;
+        font-size: 16px !important;
         font-weight: bold;
-        margin-top: 10px;
+        margin-top: 5px;
     }
-    /* 입력창 라벨 크기 조정 */
+    /* 입력창 간격 및 라벨 크기 축소 */
     .stSelectbox label, .stTextInput label, .stRadio label {
-        font-size: 14px !important;
+        font-size: 13px !important;
+    }
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.5rem !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 밴드 설정 (본인의 토큰과 키를 입력하세요) ---
+# --- 밴드 설정 (발급받은 토큰과 키를 입력하세요) ---
 BAND_ACCESS_TOKEN = "YOUR_ACCESS_TOKEN" 
 TARGET_BAND_KEY = "YOUR_BAND_KEY"
 
-# 3. 데이터 설정
+# 3. 터널 데이터 설정
 TUNNELS = {
     "국도19호선 느릅재터널": [["괴산", "괴산IC", "양방향"], False],
     "국도3호선 용관터널": [["수안보", "제천", "양방향"], True],
@@ -46,14 +49,14 @@ REPORT_TYPES = ["최초", "중간", "최종"]
 LOC_DETAILS = ["터널내", "입구부", "출구부"]
 LANES = ["1차로", "2차로", "갓길", "전차로"]
 
-# 시간 생성 함수
+# 시간 정보 함수
 def get_now_str():
     kst = timezone(timedelta(hours=9))
     now_kst = datetime.now(kst)
     weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
     return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
 
-# 밴드 사진 업로드 함수
+# 밴드 API 함수들
 def upload_image_to_band(image_file):
     url = "https://openapi.band.us/v2/album/photo/create"
     files = {'image': image_file.getvalue()}
@@ -61,22 +64,18 @@ def upload_image_to_band(image_file):
     try:
         res = requests.post(url, params=params, files=files).json()
         return res.get("result_data", {}).get("photos", [{}])[0].get("photo_id")
-    except:
-        return None
+    except: return None
 
-# 밴드 게시글 생성 함수
 def post_to_band(content, photo_id=None):
     url = "https://openapi.band.us/v2/band/post/create"
     params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY, "content": content, "do_push": True}
-    if photo_id:
-        params["photos"] = photo_id
+    if photo_id: params["photos"] = photo_id
     return requests.post(url, data=params).json()
 
-# 세션 상태 초기화
 if 'report_time' not in st.session_state:
     st.session_state.report_time = get_now_str()
 
-# --- 화면 구성 ---
+# --- 화면 레이아웃 시작 ---
 st.markdown('<p class="main-title">🚀 터널 밴드보고 작성기</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 1])
@@ -90,7 +89,7 @@ with col1:
     directions = TUNNELS[tunnel_name][0]
     direction_val = st.selectbox("방향", directions)
     
-    # 양방향 중복(양방향방향) 방지 로직
+    # '양방향'일 때 중복(양방향방향) 방지 처리
     disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
 
     st.divider()
@@ -99,26 +98,24 @@ with col1:
         work_name = st.text_input("공사명", value="터널 물청소 작업")
         work_method = st.text_input("통제방법", value="1차로 차단")
         
-        # 공사 전용 초간편 양식
+        # 공사 보고 전용 (제목에서 단계 제거)
         report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
 
     else:
-        # 사고/화재 전용 양식
+        # 교통사고/화재사고 보고 전용
         r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
         lane_needed = TUNNELS[tunnel_name][1]
         loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
         
         c_pos1, c_pos2 = st.columns(2)
-        with c_pos1:
-            lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2:
-            dist = st.text_input("거리(m)", placeholder="예: 100")
+        with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
+        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
 
         time_str = st.text_input("일시", st.session_state.report_time)
         detect_way = st.text_input("최초 인지", "CCTV 확인")
         manager = st.text_input("관리 부서", "충주국토관리사무소")
-        desc = st.text_input("사고 내용", placeholder="예: 승용차 2대 추돌")
-        status = st.text_input("진행 상황", "현장 출동 및 파악 중" if r_type == "최초" else "상황 종료")
+        desc = st.text_input("사고 내용", placeholder="내용 입력")
+        status = st.text_input("진행 상황", "현장 출동 중" if r_type == "최초" else "상황 종료")
         cause = st.text_input("사고 원인", "확인중")
         human = st.text_input("인명 피해", "없음")
         traffic = st.text_input("정체 현황", "원활")
@@ -136,338 +133,23 @@ with col1:
 ㅇ정체현황 : {traffic}"""
 
     st.divider()
-    uploaded_file = st.file_uploader("📷 현장 사진 첨부", type=['jpg', 'jpeg', 'png'])
+    uploaded_file = st.file_uploader("📷 사진 첨부 (카메라)", type=['jpg', 'jpeg', 'png'])
 
 with col2:
     st.markdown('<p class="sub-title">📋 보고서 미리보기</p>', unsafe_allow_html=True)
     st.text_area("결과물", report_text, height=300)
     
-    if st.button("📢 네이버 밴드에 즉시 게시"):
+    if st.button("📢 밴드에 즉시 게시"):
         if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
-            st.warning("먼저 밴드 토큰과 키를 설정해주세요.")
+            st.warning("밴드 토큰을 입력해 주세요.")
         else:
-            with st.spinner("밴드 전송 중..."):
+            with st.spinner("전송 중..."):
                 photo_id = None
                 if uploaded_file:
                     photo_id = upload_image_to_band(uploaded_file)
                 
                 result = post_to_band(report_text, photo_id)
                 if result.get("result_code") == 1:
-                    st.success("✅ 밴드 게시 완료!")
+                    st.success("✅ 게시 성공!")
                 else:
-                    st.error(f"❌ 실패: {result.get('result_data', {}).get('message', '오류 발생')}")
-    "국도3호선 용관터널": [["수안보", "제천", "양방향"], True],
-    "국도36호선 토계울1터널": [["청주", "충주", "양방향"], True],
-    "국도36호선 토계울2터널": [["청주", "충주", "양방향"], True],
-    "국도36호선 주덕터널": [["청주", "충주", "양방향"], True]
-}
-
-ACCIDENT_TYPES = ["교통사고", "화재사고", "공사"]
-REPORT_TYPES = ["최초", "중간", "최종"]
-LOC_DETAILS = ["터널내", "입구부", "출구부"]
-LANES = ["1차로", "2차로", "갓길", "전차로"]
-
-def get_now_str():
-    kst = timezone(timedelta(hours=9))
-    now_kst = datetime.now(kst)
-    weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
-    return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
-
-def upload_image_to_band(image_file):
-    url = "https://openapi.band.us/v2/album/photo/create"
-    files = {'image': image_file.getvalue()}
-    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY}
-    try:
-        res = requests.post(url, params=params, files=files).json()
-        return res.get("result_data", {}).get("photos", [{}])[0].get("photo_id")
-    except: return None
-
-def post_to_band(content, photo_id=None):
-    url = "https://openapi.band.us/v2/band/post/create"
-    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY, "content": content, "do_push": True}
-    if photo_id: params["photos"] = photo_id
-    return requests.post(url, data=params).json()
-
-if 'report_time' not in st.session_state:
-    st.session_state.report_time = get_now_str()
-
-# 수정된 제목 (HTML 스타일 적용)
-st.markdown('<p class="main-title">🚀 터널 밴드보고 작성기</p>', unsafe_allow_html=True)
-
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.markdown('<p class="sub-title">📝 정보 입력</p>', unsafe_allow_html=True)
-    
-    a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
-    tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
-    
-    directions = TUNNELS[tunnel_name][0]
-    direction_val = st.selectbox("방향", directions)
-    
-    # 양방향 중복 처리
-    disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
-
-    st.divider()
-
-    if a_type == "공사":
-        work_name = st.text_input("공사명", value="터널 물청소 작업")
-        work_method = st.text_input("통제방법", value="1차로 차단")
-        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
-
-    else:
-        r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
-        lane_needed = TUNNELS[tunnel_name][1]
-        loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
-        
-        c_pos1, c_pos2 = st.columns(2)
-        with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
-
-        time_str = st.text_input("일시", st.session_state.report_time)
-        detect_way = st.text_input("최초 인지", "CCTV 확인")
-        manager = st.text_input("관리 부서", "충주국토관리사무소")
-        desc = st.text_input("사고 내용", placeholder="예: 승용차 2대 추돌")
-        status = st.text_input("진행 상황", "현장 출동 및 파악 중" if r_type == "최초" else "상황 종료")
-        cause = st.text_input("사고 원인", "확인중")
-        human = st.text_input("인명 피해", "없음")
-        traffic = st.text_input("정체 현황", "원활")
-
-        report_text = f"""[{tunnel_name} {a_type} ({r_type}) 보고]
-
-ㅇ일시 : {time_str}분경
-ㅇ최초인지 : {detect_way}
-ㅇ위치 : {tunnel_name} {loc_detail}{f' {lane}' if lane else ''}{f' {dist}m' if dist else ''} ({disp_direction})
-ㅇ관리 : {manager}
-ㅇ내용 : {desc if desc else '내용 확인 중'}
-ㅇ진행상황 : {status}
-ㅇ원인 : {cause}
-ㅇ인명피해 : {human}
-ㅇ정체현황 : {traffic}"""
-
-    st.divider()
-    uploaded_file = st.file_uploader("📷 현장 사진 첨부", type=['jpg', 'jpeg', 'png'])
-
-with col2:
-    st.markdown('<p class="sub-title">📋 보고서 미리보기</p>', unsafe_allow_html=True)
-    st.text_area("결과물", report_text, height=350)
-    
-    if st.button("📢 네이버 밴드에 즉시 게시"):
-        if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
-            st.warning("먼저 밴드 토큰과 키를 입력해주세요.")
-        else:
-            with st.spinner("밴드 전송 중..."):
-                photo_id = None
-                if uploaded_file:
-                    photo_id = upload_image_to_band(uploaded_file)
-                
-                result = post_to_band(report_text, photo_id)
-                if result.get("result_code") == 1:
-                    st.success("✅ 성공적으로 게시되었습니다!")
-                else:
-                    st.error(f"❌ 실패: {result.get('result_data', {}).get('message', '알 수 없는 오류')}")
-    "국도3호선 용관터널": [["수안보", "제천", "양방향"], True],
-    "국도36호선 토계울1터널": [["청주", "충주", "양방향"], True],
-    "국도36호선 토계울2터널": [["청주", "충주", "양방향"], True],
-    "국도36호선 주덕터널": [["청주", "충주", "양방향"], True]
-}
-
-ACCIDENT_TYPES = ["교통사고", "화재사고", "공사"]
-REPORT_TYPES = ["최초", "중간", "최종"]
-LOC_DETAILS = ["터널내", "입구부", "출구부"]
-LANES = ["1차로", "2차로", "갓길", "전차로"]
-
-def get_now_str():
-    kst = timezone(timedelta(hours=9))
-    now_kst = datetime.now(kst)
-    weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
-    return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
-
-def upload_image_to_band(image_file):
-    url = "https://openapi.band.us/v2/album/photo/create"
-    files = {'image': image_file.getvalue()}
-    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY}
-    try:
-        res = requests.post(url, params=params, files=files).json()
-        return res.get("result_data", {}).get("photos", [{}])[0].get("photo_id")
-    except: return None
-
-def post_to_band(content, photo_id=None):
-    url = "https://openapi.band.us/v2/band/post/create"
-    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY, "content": content, "do_push": True}
-    if photo_id: params["photos"] = photo_id
-    return requests.post(url, data=params).json()
-
-if 'report_time' not in st.session_state:
-    st.session_state.report_time = get_now_str()
-
-# 수정된 제목 (HTML 스타일 적용)
-st.markdown('<p class="main-title">🚀 터널 밴드보고 작성기</p>', unsafe_allow_html=True)
-
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.markdown('<p class="sub-title">📝 정보 입력</p>', unsafe_allow_html=True)
-    
-    a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
-    tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
-    
-    directions = TUNNELS[tunnel_name][0]
-    direction_val = st.selectbox("방향", directions)
-    
-    # 양방향 중복 처리
-    disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
-
-    st.divider()
-
-    if a_type == "공사":
-        work_name = st.text_input("공사명", value="터널 물청소 작업")
-        work_method = st.text_input("통제방법", value="1차로 차단")
-        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
-
-    else:
-        r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
-        lane_needed = TUNNELS[tunnel_name][1]
-        loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
-        
-        c_pos1, c_pos2 = st.columns(2)
-        with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
-
-        time_str = st.text_input("일시", st.session_state.report_time)
-        detect_way = st.text_input("최초 인지", "CCTV 확인")
-        manager = st.text_input("관리 부서", "충주국토관리사무소")
-        desc = st.text_input("사고 내용", placeholder="예: 승용차 2대 추돌")
-        status = st.text_input("진행 상황", "현장 출동 및 파악 중" if r_type == "최초" else "상황 종료")
-        cause = st.text_input("사고 원인", "확인중")
-        human = st.text_input("인명 피해", "없음")
-        traffic = st.text_input("정체 현황", "원활")
-
-        report_text = f"""[{tunnel_name} {a_type} ({r_type}) 보고]
-
-ㅇ일시 : {time_str}분경
-ㅇ최초인지 : {detect_way}
-ㅇ위치 : {tunnel_name} {loc_detail}{f' {lane}' if lane else ''}{f' {dist}m' if dist else ''} ({disp_direction})
-ㅇ관리 : {manager}
-ㅇ내용 : {desc if desc else '내용 확인 중'}
-ㅇ진행상황 : {status}
-ㅇ원인 : {cause}
-ㅇ인명피해 : {human}
-ㅇ정체현황 : {traffic}"""
-
-    st.divider()
-    uploaded_file = st.file_uploader("📷 현장 사진 첨부", type=['jpg', 'jpeg', 'png'])
-
-with col2:
-    st.markdown('<p class="sub-title">📋 보고서 미리보기</p>', unsafe_allow_html=True)
-    st.text_area("결과물", report_text, height=350)
-    
-    if st.button("📢 네이버 밴드에 즉시 게시"):
-        if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
-            st.warning("먼저 밴드 토큰과 키를 입력해주세요.")
-        else:
-            with st.spinner("밴드 전송 중..."):
-                photo_id = None
-                if uploaded_file:
-                    photo_id = upload_image_to_band(uploaded_file)
-                
-                result = post_to_band(report_text, photo_id)
-                if result.get("result_code") == 1:
-                    st.success("✅ 성공적으로 게시되었습니다!")
-                else:
-                    st.error(f"❌ 실패: {result.get('result_data', {}).get('message', '알 수 없는 오류')}")
-        res = requests.post(url, params=params, files=files).json()
-        return res.get("result_data", {}).get("photos", [{}])[0].get("photo_id")
-    except: return None
-
-def post_to_band(content, photo_id=None):
-    url = "https://openapi.band.us/v2/band/post/create"
-    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY, "content": content, "do_push": True}
-    if photo_id: params["photos"] = photo_id
-    return requests.post(url, data=params).json()
-
-if 'report_time' not in st.session_state:
-    st.session_state.report_time = get_now_str()
-
-st.title("🚀 터널 현장보고 작성기")
-
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.subheader("📝 정보 입력")
-    
-    # 1. 유형 및 터널 선택
-    a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
-    tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
-    
-    # 2. 방향 선택 및 중복 문구(양방향방향) 처리
-    directions = TUNNELS[tunnel_name][0]
-    direction_val = st.selectbox("방향", directions)
-    
-    # '양방향' 선택 시 뒤에 '방향'을 붙이지 않음
-    disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
-
-    st.divider()
-
-    if a_type == "공사":
-        # --- 공사 전용 양식 ---
-        work_name = st.text_input("공사명", value="터널 물청소 작업")
-        work_method = st.text_input("통제방법", value="1차로 차단")
-        
-        # 제목: [국도XX호선 XX터널], 본문: 방향 공사명 통제방법
-        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
-
-    else:
-        # --- 교통사고 / 화재사고 전용 양식 ---
-        r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
-        lane_needed = TUNNELS[tunnel_name][1]
-        loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
-        
-        c_pos1, c_pos2 = st.columns(2)
-        with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
-
-        time_str = st.text_input("일시", st.session_state.report_time)
-        detect_way = st.text_input("최초 인지", "CCTV 확인")
-        manager = st.text_input("관리 부서", "충주국토관리사무소")
-        desc = st.text_input("사고 내용", placeholder="예: 승용차 2대 추돌")
-        status = st.text_input("진행 상황", "현장 출동 및 파악 중" if r_type == "최초" else "상황 종료")
-        cause = st.text_input("사고 원인", "확인중")
-        human = st.text_input("인명 피해", "없음")
-        traffic = st.text_input("정체 현황", "원활")
-
-        report_text = f"""[{tunnel_name} {a_type} ({r_type}) 보고]
-
-ㅇ일시 : {time_str}분경
-ㅇ최초인지 : {detect_way}
-ㅇ위치 : {tunnel_name} {loc_detail}{f' {lane}' if lane else ''}{f' {dist}m' if dist else ''} ({disp_direction})
-ㅇ관리 : {manager}
-ㅇ내용 : {desc if desc else '내용 확인 중'}
-ㅇ진행상황 : {status}
-ㅇ원인 : {cause}
-ㅇ인명피해 : {human}
-ㅇ정체현황 : {traffic}"""
-
-    st.divider()
-    uploaded_file = st.file_uploader("📷 현장 사진 첨부", type=['jpg', 'jpeg', 'png'])
-
-with col2:
-    st.subheader("📋 보고서 미리보기")
-    st.text_area("결과물", report_text, height=400)
-    
-    if st.button("📢 네이버 밴드에 즉시 게시"):
-        if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
-            st.warning("먼저 밴드 토큰과 키를 입력해주세요.")
-        else:
-            with st.spinner("밴드 전송 중..."):
-                photo_id = None
-                if uploaded_file:
-                    photo_id = upload_image_to_band(uploaded_file)
-                
-                result = post_to_band(report_text, photo_id)
-                if result.get("result_code") == 1:
-                    st.success("✅ 성공적으로 게시되었습니다!")
-                else:
-                    st.error(f"❌ 실패: {result.get('result_data', {}).get('message', '알 수 없는 오류')}")
-
-    st.info("💡 팁: '양방향' 선택 시 자동으로 '방향' 문구가 조정됩니다.")
+                    st.error("❌ 실패: 설정을 확인하세요.")
