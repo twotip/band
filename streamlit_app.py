@@ -5,23 +5,20 @@ from datetime import datetime, timedelta, timezone
 # 1. 페이지 설정
 st.set_page_config(page_title="터널 밴드보고 작성기", layout="wide")
 
-# 2. 모바일 최적화 스타일 (문법 오류 수정 완료)
+# 2. 모바일 최적화 스타일
 st.markdown("""
     <style>
-    /* 제목 크기 대폭 축소 */
     .main-title {
         font-size: 20px !important;
         font-weight: bold;
         margin-bottom: 10px;
         color: #FFFFFF;
     }
-    /* 서브헤더 크기 조정 */
     .sub-title {
         font-size: 16px !important;
         font-weight: bold;
         margin-top: 5px;
     }
-    /* 입력창 간격 및 라벨 크기 축소 */
     .stSelectbox label, .stTextInput label, .stRadio label {
         font-size: 13px !important;
     }
@@ -35,7 +32,7 @@ st.markdown("""
 BAND_ACCESS_TOKEN = "YOUR_ACCESS_TOKEN" 
 TARGET_BAND_KEY = "YOUR_BAND_KEY"
 
-# 3. 터널 데이터 설정
+# 3. 터널 데이터 설정 (느릅재터널은 두번째 값이 False로 차로 비활성)
 TUNNELS = {
     "국도19호선 느릅재터널": [["괴산", "괴산IC", "양방향"], False],
     "국도3호선 용관터널": [["수안보", "제천", "양방향"], True],
@@ -49,14 +46,12 @@ REPORT_TYPES = ["최초", "중간", "최종"]
 LOC_DETAILS = ["터널내", "입구부", "출구부"]
 LANES = ["1차로", "2차로", "갓길", "전차로"]
 
-# 시간 정보 함수
 def get_now_str():
     kst = timezone(timedelta(hours=9))
     now_kst = datetime.now(kst)
     weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
     return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
 
-# 밴드 API 함수들
 def upload_image_to_band(image_file):
     url = "https://openapi.band.us/v2/album/photo/create"
     files = {'image': image_file.getvalue()}
@@ -75,7 +70,7 @@ def post_to_band(content, photo_id=None):
 if 'report_time' not in st.session_state:
     st.session_state.report_time = get_now_str()
 
-# --- 화면 레이아웃 시작 ---
+# --- 화면 레이아웃 ---
 st.markdown('<p class="main-title">🚀 터널 밴드보고 작성기</p>', unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 1])
@@ -86,30 +81,37 @@ with col1:
     a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
     tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
     
+    # 해당 터널의 방향 리스트와 차로 필요 여부 가져오기
     directions = TUNNELS[tunnel_name][0]
-    direction_val = st.selectbox("방향", directions)
+    lane_needed = TUNNELS[tunnel_name][1]
     
-    # '양방향'일 때 중복(양방향방향) 방지 처리
+    direction_val = st.selectbox("방향", directions)
     disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
 
     st.divider()
 
     if a_type == "공사":
         work_name = st.text_input("공사명", value="터널 물청소 작업")
-        work_method = st.text_input("통제방법", value="1차로 차단")
         
-        # 공사 보고 전용 (제목에서 단계 제거)
-        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
+        # 차로가 필요한 터널(용관, 주덕 등)일 때만 차단 차로 입력창 표시
+        work_lane = ""
+        if lane_needed:
+            work_lane = st.selectbox("차단 차로", LANES)
+        
+        # 공사 보고 양식 (차로가 없으면 공백으로 처리됨)
+        lane_str = f" {work_lane}" if work_lane else ""
+        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name}{lane_str} 차단\n안전운전하세요."
 
     else:
-        # 교통사고/화재사고 보고 전용
+        # 교통사고/화재사고 양식
         r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
-        lane_needed = TUNNELS[tunnel_name][1]
         loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
         
         c_pos1, c_pos2 = st.columns(2)
-        with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
+        with c_pos1:
+            lane = st.selectbox("사고 차로", LANES) if lane_needed else ""
+        with c_pos2:
+            dist = st.text_input("거리(m)", placeholder="예: 100")
 
         time_str = st.text_input("일시", st.session_state.report_time)
         detect_way = st.text_input("최초 인지", "CCTV 확인")
