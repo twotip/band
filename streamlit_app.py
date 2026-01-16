@@ -18,7 +18,6 @@ TUNNELS = {
     "국도36호선 주덕터널": [["청주", "충주", "양방향"], True]
 }
 
-# 사고 유형에 공사 포함
 ACCIDENT_TYPES = ["교통사고", "화재사고", "공사"]
 REPORT_TYPES = ["최초", "중간", "최종"]
 LOC_DETAILS = ["터널내", "입구부", "출구부"]
@@ -55,33 +54,36 @@ col1, col2 = st.columns([1, 1])
 with col1:
     st.subheader("📝 정보 입력")
     
-    # 유형 선택 (교통사고, 화재사고, 공사)
+    # 1. 유형 및 터널 선택
     a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
-    
-    # 공사일 때와 사고일 때 입력 폼 분리
     tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
+    
+    # 2. 방향 선택 및 중복 문구(양방향방향) 처리
     directions = TUNNELS[tunnel_name][0]
-    direction = st.selectbox("방향", directions)
+    direction_val = st.selectbox("방향", directions)
+    
+    # '양방향' 선택 시 뒤에 '방향'을 붙이지 않음
+    disp_direction = direction_val if "양방향" in direction_val else f"{direction_val}방향"
 
     st.divider()
 
     if a_type == "공사":
-        # --- 공사 전용 입력 ---
-        work_name = st.text_input("공사명", placeholder="예: 터널 투광등 교체 작업")
-        work_method = st.text_input("통제방법", placeholder="예: 1차로 차단")
+        # --- 공사 전용 양식 ---
+        work_name = st.text_input("공사명", value="터널 물청소 작업")
+        work_method = st.text_input("통제방법", value="1차로 차단")
         
-        # 공사 보고서 양식 (요청하신 대로 제목에서 단계 삭제 및 본문 간소화)
-        report_text = f"[{tunnel_name}]\n\n{direction}방향 {work_name} {work_method}\n안전운전하세요."
+        # 제목: [국도XX호선 XX터널], 본문: 방향 공사명 통제방법
+        report_text = f"[{tunnel_name}]\n\n{disp_direction} {work_name} {work_method}\n안전운전하세요."
 
     else:
-        # --- 교통사고 / 화재사고 전용 입력 ---
+        # --- 교통사고 / 화재사고 전용 양식 ---
         r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
         lane_needed = TUNNELS[tunnel_name][1]
         loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
         
         c_pos1, c_pos2 = st.columns(2)
         with c_pos1: lane = st.selectbox("차로", LANES) if lane_needed else ""
-        with c_pos2: dist = st.text_input("거리(m)", placeholder="숫자만 입력")
+        with c_pos2: dist = st.text_input("거리(m)", placeholder="예: 100")
 
         time_str = st.text_input("일시", st.session_state.report_time)
         detect_way = st.text_input("최초 인지", "CCTV 확인")
@@ -92,12 +94,11 @@ with col1:
         human = st.text_input("인명 피해", "없음")
         traffic = st.text_input("정체 현황", "원활")
 
-        # 사고 보고서 양식
         report_text = f"""[{tunnel_name} {a_type} ({r_type}) 보고]
 
 ㅇ일시 : {time_str}분경
 ㅇ최초인지 : {detect_way}
-ㅇ위치 : {tunnel_name} {loc_detail}{f' {lane}' if lane else ''}{f' {dist}m' if dist else ''} ({direction}방향)
+ㅇ위치 : {tunnel_name} {loc_detail}{f' {lane}' if lane else ''}{f' {dist}m' if dist else ''} ({disp_direction})
 ㅇ관리 : {manager}
 ㅇ내용 : {desc if desc else '내용 확인 중'}
 ㅇ진행상황 : {status}
@@ -106,7 +107,7 @@ with col1:
 ㅇ정체현황 : {traffic}"""
 
     st.divider()
-    uploaded_file = st.file_uploader("📷 현장 사진 첨부 (카메라/갤러리)", type=['jpg', 'jpeg', 'png'])
+    uploaded_file = st.file_uploader("📷 현장 사진 첨부", type=['jpg', 'jpeg', 'png'])
 
 with col2:
     st.subheader("📋 보고서 미리보기")
@@ -114,7 +115,7 @@ with col2:
     
     if st.button("📢 네이버 밴드에 즉시 게시"):
         if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
-            st.warning("먼저 밴드 토큰을 입력해주세요.")
+            st.warning("먼저 밴드 토큰과 키를 입력해주세요.")
         else:
             with st.spinner("밴드 전송 중..."):
                 photo_id = None
@@ -125,4 +126,6 @@ with col2:
                 if result.get("result_code") == 1:
                     st.success("✅ 성공적으로 게시되었습니다!")
                 else:
-                    st.error("❌ 게시 실패. API 설정을 확인하세요.")
+                    st.error(f"❌ 실패: {result.get('result_data', {}).get('message', '알 수 없는 오류')}")
+
+    st.info("💡 팁: '양방향' 선택 시 자동으로 '방향' 문구가 조정됩니다.")
