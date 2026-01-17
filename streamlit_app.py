@@ -61,6 +61,154 @@ def upload_image_to_band(image_file):
     url = "https://openapi.band.us/v2/album/photo/create"
     params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY}
     try:
+        files = {"image": (image_file.name, image_file.getvalue(), image_file.type)}
+        res = requests.post(url, params=params, files=files, timeout=20).json()
+        return res.get("result_data", {}).get("photos", [{}])[0].get("photo_id")
+    except Exception:
+        return None
+
+
+def post_to_band(content, photo_id=None):
+    url = "https://openapi.band.us/v2/band/post/create"
+    params = {
+        "access_token": BAND_ACCESS_TOKEN,
+        "band_key": TARGET_BAND_KEY,
+        "content": content,
+        "do_push": True,
+    }
+    if photo_id:
+        params["photos"] = photo_id
+    return requests.post(url, data=params, timeout=20).json()
+
+
+# session defaults
+if "report_time" not in st.session_state:
+    st.session_state.report_time = get_now_str()
+
+if "detect_way" not in st.session_state:
+    st.session_state.detect_way = "느릅재터널 CCTV 확인"
+
+
+# layout
+st.markdown('<p class="main-title">🚀 터널 밴드보고 작성기</p>', unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown('<p class="sub-title">📝 정보 입력</p>', unsafe_allow_html=True)
+
+    a_type = st.selectbox("유형 선택", ACCIDENT_TYPES)
+    tunnel_name = st.selectbox("터널 선택", list(TUNNELS.keys()))
+
+    directions, lane_needed = TUNNELS[tunnel_name]
+    direction_val = st.selectbox("방향", directions)
+
+    if direction_val == "양방향":
+        disp_direction = "양방향"
+    else:
+        disp_direction = f"{direction_val} 방향"
+
+    st.divider()
+
+    if a_type == "공사":
+        work_name = st.text_input("공사명", value="터널 물청소 작업")
+
+        work_lane = ""
+        if lane_needed:
+            work_lane = st.selectbox("차단 차로", LANES)
+
+        lane_str = f" {work_lane}" if work_lane else ""
+        report_text = (
+            f"[{tunnel_name}]\n\n"
+            f"{disp_direction} {work_name}{lane_str} 차단\n"
+            "안전운전하세요."
+        )
+
+    else:
+        r_type = st.selectbox("보고 단계", REPORT_TYPES, index=0)
+        loc_detail = st.radio("상세 위치", LOC_DETAILS, horizontal=True)
+
+        c_pos1, c_pos2 = st.columns(2)
+        with c_pos1:
+            lane = st.selectbox("사고 차로", LANES) if lane_needed else ""
+        with c_pos2:
+            dist = st.text_input("거리(m)", placeholder="예: 100")
+
+        time_str = st.text_input("일시", st.session_state.report_time)
+        detect_way = st.text_input("최초 인지", key="detect_way")
+
+        manager = st.text_input("관리 부서", "충주국토관리사무소")
+        desc = st.text_input("사고 내용", placeholder="내용 입력")
+        status = st.text_input("진행 상황", "현장 출동 중" if r_type == "최초" else "상황 종료")
+        cause = st.text_input("사고 원인", "확인중")
+        human = st.text_input("인명 피해", "없음")
+        traffic = st.text_input("정체 현황", "원활")
+
+        pos_lane = f" {lane}" if lane else ""
+        pos_dist = f" {dist}m" if dist else ""
+
+        report_text = (
+            f"[{tunnel_name} {a_type} ({r_type}) 보고]\n\n"
+            f"ㅇ일시 : {time_str}분경\n"
+            f"ㅇ최초인지 : {detect_way}\n"
+            f"ㅇ위치 : {tunnel_name} {loc_detail}{pos_lane}{pos_dist} ({disp_direction})\n"
+            f"ㅇ관리 : {manager}\n"
+            f"ㅇ내용 : {desc if desc else '내용 확인 중'}\n"
+            f"ㅇ진행상황 : {status}\n"
+            f"ㅇ원인 : {cause}\n"
+            f"ㅇ인명피해 : {human}\n"
+            f"ㅇ정체현황 : {traffic}"
+        )
+
+    st.divider()
+    uploaded_file = st.file_uploader("📷 사진 첨부 (카메라)", type=["jpg", "jpeg", "png"])
+
+with col2:
+    st.markdown('<p class="sub-title">📋 보고서 미리보기</p>', unsafe_allow_html=True)
+    st.text_area("결과물", report_text, height=300)
+
+    if st.button("🔄 최초인지 기본값으로 초기화"):
+        st.session_state.detect_way = "느릅재터널 CCTV 확인"
+        st.rerun()
+
+    if st.button("📢 밴드에 즉시 게시"):
+        if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
+            st.warning("밴드 토큰을 입력해 주세요.")
+        else:
+            with st.spinner("전송 중..."):
+                photo_id = upload_image_to_band(uploaded_file) if uploaded_file else None
+                result = post_to_band(report_text, photo_id)
+
+                if result.get("result_code") == 1:
+                    st.success("✅ 게시 성공!")
+                else:
+                    st.error(f"❌ 실패: {result}")
+# Tunnel config: (directions, lane_needed)
+TUNNELS = {
+    "국도19호선 느릅재터널": (["괴산", "괴산IC", "양방향"], False),
+    "국도3호선 용관터널": (["수안보", "제천", "양방향"], True),
+    "국도36호선 토계울1터널": (["청주", "충주", "양방향"], True),
+    "국도36호선 토계울2터널": (["청주", "충주", "양방향"], True),
+    "국도36호선 주덕터널": (["청주", "충주", "양방향"], True),
+}
+
+ACCIDENT_TYPES = ["교통사고", "화재사고", "공사"]
+REPORT_TYPES = ["최초", "중간", "최종"]
+LOC_DETAILS = ["터널내", "입구부", "출구부"]
+LANES = ["1차로", "2차로", "갓길", "전차로"]
+
+
+def get_now_str():
+    kst = timezone(timedelta(hours=9))
+    now_kst = datetime.now(kst)
+    weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
+    return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
+
+
+def upload_image_to_band(image_file):
+    url = "https://openapi.band.us/v2/album/photo/create"
+    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY}
+    try:
         files = {"image": (TUNNELS = {
     "국도19호선 느릅재터널": (["괴산", "괴산IC", "양방향"], False),
     "국도3호선 용관터널": (["수안보", "제천", "양방향"], True),
