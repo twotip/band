@@ -123,7 +123,8 @@ with col1:
             dist = st.text_input("거리(m)", placeholder="예: 100")
 
         time_str = st.text_input("일시", st.session_state.report_time)
-        detect_way = st.text_input("최초 인지", "CCTV 확인")
+        # ✅ 기본값 변경: "CCTV 확인" -> "느릅재터널 CCTV 확인"
+        detect_way = st.text_input("최초 인지", "느릅재터널 CCTV 확인")
         manager = st.text_input("관리 부서", "충주국토관리사무소")
         desc = st.text_input("사고 내용", placeholder="내용 입력")
         status = st.text_input("진행 상황", "현장 출동 중" if r_type == "최초" else "상황 종료")
