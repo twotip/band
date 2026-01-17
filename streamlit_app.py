@@ -2,11 +2,12 @@ import streamlit as st
 import requests
 from datetime import datetime, timedelta, timezone
 
-# 1. 페이지 설정
+# 1. Page config
 st.set_page_config(page_title="터널 밴드보고 작성기", layout="wide")
 
-# 2. 모바일 최적화 스타일
-st.markdown("""
+# 2. Mobile friendly CSS
+st.markdown(
+    """
     <style>
     .main-title {
         font-size: 20px !important;
@@ -26,15 +27,41 @@ st.markdown("""
         gap: 0.5rem !important;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-# --- 밴드 설정 (발급받은 토큰과 키를 입력하세요) ---
+# Band config
 BAND_ACCESS_TOKEN = "YOUR_ACCESS_TOKEN"
 TARGET_BAND_KEY = "YOUR_BAND_KEY"
 
-# 3. 터널 데이터 설정 (느릅재터널은 두번째 값이 False로 차로 비활성)
-# ✅ 방향 리스트 이중리스트 제거: (["괴산","괴산IC","양방향"], False) 형태
+# Tunnel config: (directions, lane_needed)
 TUNNELS = {
+    "국도19호선 느릅재터널": (["괴산", "괴산IC", "양방향"], False),
+    "국도3호선 용관터널": (["수안보", "제천", "양방향"], True),
+    "국도36호선 토계울1터널": (["청주", "충주", "양방향"], True),
+    "국도36호선 토계울2터널": (["청주", "충주", "양방향"], True),
+    "국도36호선 주덕터널": (["청주", "충주", "양방향"], True),
+}
+
+ACCIDENT_TYPES = ["교통사고", "화재사고", "공사"]
+REPORT_TYPES = ["최초", "중간", "최종"]
+LOC_DETAILS = ["터널내", "입구부", "출구부"]
+LANES = ["1차로", "2차로", "갓길", "전차로"]
+
+
+def get_now_str():
+    kst = timezone(timedelta(hours=9))
+    now_kst = datetime.now(kst)
+    weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
+    return now_kst.strftime(f"%Y.%m.%d({weekday_map[now_kst.weekday()]}) %H:%M")
+
+
+def upload_image_to_band(image_file):
+    url = "https://openapi.band.us/v2/album/photo/create"
+    params = {"access_token": BAND_ACCESS_TOKEN, "band_key": TARGET_BAND_KEY}
+    try:
+        files = {"image": (TUNNELS = {
     "국도19호선 느릅재터널": (["괴산", "괴산IC", "양방향"], False),
     "국도3호선 용관터널": (["수안보", "제천", "양방향"], True),
     "국도36호선 토계울1터널": (["청주", "충주", "양방향"], True),
