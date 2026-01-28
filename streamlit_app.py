@@ -19,7 +19,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# Band 설정
+# Band 설정 (보안을 위해 실제 운영 시 st.secrets 권장)
 # =========================
 BAND_ACCESS_TOKEN = "YOUR_ACCESS_TOKEN"
 TARGET_BAND_KEY = "YOUR_BAND_KEY"
@@ -95,50 +95,28 @@ with col1:
 
     directions, lane_needed = TUNNELS[tunnel_name]
     direction_val = st.selectbox("방향", directions)
-
     direction_tag = direction_val if direction_val == "양방향" else f"{direction_val}방향"
 
     st.divider()
 
-    # ===== 공사 =====
+    # ===== [개선] 공사 파트 =====
     if a_type == "공사":
         work_name = st.text_input("공사명", "터널 물청소 작업")
 
-        # 느릅재터널
         if "느릅재터널" in tunnel_name:
-            control = st.radio(
-                "통제 방식",
-                ["전면차단통제", "부분통제"],
-                horizontal=True
-            )
-
+            control = st.radio("통제 방식", ["전면차단통제", "부분통제"], horizontal=True)
             if control == "전면차단통제":
                 flow = "우회중"
-                st.info("전면차단통제 시 차량 소통 방식은 '우회중'으로 고정됩니다.")
-                report_text = (
-                    f"[{tunnel_name}]\n\n"
-                    f"{direction_tag} {work_name} 전면차단통제 "
-                    f"{flow} 안전운전하세요."
-                )
+                report_text = f"[{tunnel_name}]\n\n{direction_tag} {work_name} 전면차단통제 {flow} 안전운전하세요."
             else:
                 flow = st.selectbox("차량 소통 방식", ["차량교차운행중", "우회중"], index=0)
-                report_text = (
-                    f"[{tunnel_name}]\n\n"
-                    f"{direction_tag} {work_name} 부분통제 "
-                    f"{flow} 안전운전하세요."
-                )
-
-        # 기타 터널
+                report_text = f"[{tunnel_name}]\n\n{direction_tag} {work_name} 부분통제 {flow} 안전운전하세요."
         else:
             lane = st.selectbox("차단 차로", LANES) if lane_needed else ""
             lane_str = f" {lane}" if lane else ""
-            report_text = (
-                f"[{tunnel_name}]\n\n"
-                f"{direction_tag} {work_name}{lane_str} 통제\n"
-                f"안전운전하세요."
-            )
+            report_text = f"[{tunnel_name}]\n\n{direction_tag} {work_name}{lane_str} 통제\n안전운전하세요."
 
-    # ===== 사고 / 화재 =====
+    # ===== [기존] 사고 / 화재 파트 =====
     else:
         r_type = st.selectbox("보고 단계", REPORT_TYPES)
         loc = st.radio("위치", LOC_DETAILS, horizontal=True)
@@ -158,13 +136,16 @@ with col1:
         )
 
     uploaded_file = st.file_uploader("📷 사진 첨부", type=["jpg","jpeg","png"])
+    if uploaded_file:
+        st.image(uploaded_file, caption="선택된 이미지", width=250)
 
 # =========================
 # 미리보기 / 전송
 # =========================
 with col2:
     st.markdown('<p class="sub-title">📋 보고서 미리보기</p>', unsafe_allow_html=True)
-    st.text_area("결과물", report_text, height=350)
+    # 수정이 가능하도록 text_area의 value로 report_text 지정
+    final_report = st.text_area("결과물 (수정 가능)", report_text, height=350)
 
     if st.button("📢 밴드에 즉시 게시", use_container_width=True):
         if BAND_ACCESS_TOKEN == "YOUR_ACCESS_TOKEN":
@@ -172,11 +153,12 @@ with col2:
         else:
             with st.spinner("전송 중..."):
                 photo_id = upload_image_to_band(uploaded_file) if uploaded_file else None
-                res = post_to_band(report_text, photo_id)
+                # 사용자가 텍스트 영역에서 직접 수정한 내용(final_report)을 전송
+                res = post_to_band(final_report, photo_id)
                 if res.get("result_code") == 1:
                     st.success("게시 완료")
                 else:
-                    st.error(res)
+                    st.error(f"오류 발생: {res}")
 
     if st.button("🔄 시간 새로고침", use_container_width=True):
         st.session_state.report_time = get_now_str()
